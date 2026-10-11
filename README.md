@@ -1,5 +1,7 @@
 # Dupe Finder
 
+## WARNING: Make sure to double check before deleting any files crucial to the system.
+
 A small Windows tool that finds duplicate files by content and moves the extra copies to the Recycle Bin.
 
 It is one `.exe` with no installer and no dependencies. It starts a tiny server that only your own computer can reach, and opens a review page in your browser.
