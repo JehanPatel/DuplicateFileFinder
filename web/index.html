@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dupe Finder</title>
+<style>
+:root {
+  --paper: #F2F4F1;
+  --panel: #FFFFFF;
+  --ink: #16262C;
+  --muted: #5B6B70;
+  --line: #D8DED9;
+  --accent: #1F5FD6;
+  --danger: #B3261E;
+  --keep: #1E6F46;
+  --mono: "Cascadia Mono", Consolas, Menlo, monospace;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { background: var(--paper); }
+body {
+  margin: 0;
+  padding-bottom: 88px;
+  color: var(--ink);
+  font: 15px/1.5 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+.top, main { max-width: 920px; margin: 0 auto; padding-left: 20px; padding-right: 20px; }
+.top { display: flex; align-items: center; justify-content: space-between; padding-top: 18px; }
+h1 { margin: 0; font-size: 18px; font-weight: 600; }
+main { padding-top: 8px; padding-bottom: 24px; }
+
+button {
+  font: inherit; color: var(--ink); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 6px;
+  padding: 8px 14px; cursor: pointer;
+}
+button:hover:not(:disabled) { border-color: #9AA8A3; }
+button:disabled { opacity: .5; cursor: default; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+button.danger { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 600; }
+button.quiet { background: transparent; border-color: transparent; color: var(--muted); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+input[type=text], select {
+  font: inherit; color: inherit; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px;
+}
+input[type=text] { flex: 1; min-width: 0; font-family: var(--mono); font-size: 14px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.field { display: block; margin: 18px 0 6px; font-weight: 600; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 14px; }
+.chip { padding: 2px 10px; font-size: 13px; border-radius: 99px; color: var(--muted); }
+.opts { color: var(--muted); }
+textarea {
+  display: block; width: 100%; margin: 8px 0; padding: 8px 10px; resize: vertical;
+  font: 14px/1.4 var(--mono); color: inherit; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 6px;
+}
+details { margin: 14px 0 0; }
+summary { cursor: pointer; font-weight: 600; }
+.hint { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
+
+#progress { margin-top: 24px; }
+#pbar { height: 6px; margin: 8px 0; overflow: hidden; border-radius: 3px; background: var(--line); }
+#pfill { width: 0; height: 100%; background: var(--accent); }
+@media (prefers-reduced-motion: no-preference) {
+  #pfill { transition: width .3s; }
+  #pbar.busy #pfill { animation: slide 1.4s ease-in-out infinite alternate; }
+}
+@keyframes slide { from { margin-left: 0; } to { margin-left: 70%; } }
+#pnote { color: var(--muted); min-height: 1.5em; }
+
+.big { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin: 28px 0 4px; }
+#freeable { font-size: clamp(44px, 9vw, 76px); font-weight: 600; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.bigcap { font-size: 20px; color: var(--muted); }
+#summary { margin: 0 0 16px; color: var(--muted); }
+#tools { margin: 8px 0 4px; }
+#tools .lead { color: var(--muted); margin-right: 4px; }
+
+.group { margin: 12px 0; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+.group header { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.group .free { color: var(--muted); }
+.group ul { margin: 0; padding: 0; list-style: none; }
+.group li { display: flex; align-items: center; gap: 12px; padding: 8px 14px; }
+.group li + li { border-top: 1px solid var(--line); }
+.group li label { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; cursor: pointer; }
+.path { font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; }
+.dir { color: var(--muted); }
+.name { font-weight: 600; }
+.date { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.tag { display: none; width: 62px; color: var(--keep); font-size: 13px; font-weight: 600; }
+li.kept .tag { display: inline; }
+#more { margin: 8px 0 16px; }
+
+#msg { min-height: 1.5em; margin: 14px 0 0; color: var(--muted); }
+#msg.error { color: var(--danger); }
+
+#bar { position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 20px; background: var(--panel); border-top: 1px solid var(--line); }
+#bar .in { max-width: 880px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+
+@media (max-width: 560px) { .date { display: none; } }
+</style>
+</head>
+<body>
+<div class="top">
+  <h1>Dupe Finder</h1>
+  <button id="quit" class="quiet" type="button">Quit</button>
+</div>
+
+<main>
+  <section>
+    <label class="field" for="path">Folder to scan</label>
+    <div class="row">
+      <input id="path" type="text" spellcheck="false" autocomplete="off" placeholder="Paste a folder path">
+      <button id="browse" type="button" hidden>Browse</button>
+      <button id="go" class="primary" type="button">Scan folder</button>
+    </div>
+    <div id="places" class="chips"></div>
+    <div class="row opts">
+      <label for="minsize">Ignore files smaller than</label>
+      <select id="minsize">
+        <option value="0">Nothing, scan every file</option>
+        <option value="100">100 KB</option>
+        <option value="1024" selected>1 MB</option>
+        <option value="10240">10 MB</option>
+      </select>
+    </div>
+    <details id="skipbox">
+      <summary>Folders to skip</summary>
+      <p class="hint">Files in these folders are never scanned or selected. Add one folder per line. Windows, Program Files, driver and setup folders, and developer folders are always skipped.</p>
+      <textarea id="skip" rows="3" spellcheck="false" aria-label="Folders to skip, one per line"></textarea>
+      <button id="addskip" type="button" hidden>Add a folder to skip</button>
+    </details>
+  </section>
+
+  <section id="progress" hidden aria-live="polite">
+    <div class="row" style="justify-content: space-between">
+      <strong id="ptext">Starting</strong>
+      <button id="cancel" type="button">Cancel</button>
+    </div>
+    <div id="pbar"><div id="pfill"></div></div>
+    <div id="pnote"></div>
+  </section>
+
+  <p id="msg" role="status"></p>
+
+  <section id="results" hidden>
+    <div class="big"><span id="freeable">0 B</span><span class="bigcap">can be freed</span></div>
+    <p id="summary"></p>
+    <div id="tools" class="row">
+      <span class="lead">Select duplicates, keeping the</span>
+      <button type="button" data-keep="oldest">Oldest</button>
+      <button type="button" data-keep="newest">Newest</button>
+      <button type="button" data-keep="shortest">Shortest path</button>
+      <button type="button" id="clear" class="quiet">Clear selection</button>
+    </div>
+    <div id="groups"></div>
+    <button id="more" type="button" hidden>Show more</button>
+  </section>
+</main>
+
+<div id="bar" hidden>
+  <div class="in">
+    <span id="selinfo">No files selected</span>
+    <button id="del" class="danger" type="button" disabled>Move to the Recycle Bin</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var token = new URLSearchParams(location.search).get('t') || '';
+  var PAGE = 100;
+  var state = { groups: [], selected: new Set(), shown: PAGE, trashName: 'Recycle Bin' };
+
+  function $(id) { return document.getElementById(id); }
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  function plural(n, one, many) { return n.toLocaleString() + ' ' + (n === 1 ? one : many); }
+
+  function fmtBytes(n) {
+    var units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    var i = 0;
+    while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+    var digits = (i === 0 || n >= 100) ? 0 : (n >= 10 ? 1 : 2);
+    return n.toFixed(digits) + ' ' + units[i];
+  }
+
+  function splitPath(p) {
+    var i = Math.max(p.lastIndexOf('\\'), p.lastIndexOf('/'));
+    return { dir: p.slice(0, i + 1), name: p.slice(i + 1) };
+  }
+
+  function setMsg(text, kind) {
+    var m = $('msg');
+    m.textContent = text || '';
+    m.className = kind || '';
+  }
+
+  async function api(path, method, body) {
+    var opts = { method: method || 'GET', headers: { 'X-Token': token } };
+    if (body !== undefined) {
+      opts.headers['Content-Type'] = 'application/json';
+      opts.body = JSON.stringify(body);
+    }
+    var res = await fetch(path, opts);
+    var data = {};
+    try { data = await res.json(); } catch (e) { /* empty body */ }
+    if (!res.ok) throw new Error(data.error || ('Request failed (' + res.status + ').'));
+    return data;
+  }
+
+  /* ---------- scanning ---------- */
+
+  async function startScan() {
+    var path = $('path').value.trim();
+    if (!path) { setMsg('Enter or choose a folder first.', 'error'); return; }
+    if (/^[A-Za-z]:[\\\/]*$/.test(path) || path === '/') {
+      var proceed = window.confirm(
+        'You are about to scan a whole drive.\n\n' +
+        'Programs and Windows keep identical files on purpose. Only select files in folders you recognize, ' +
+        'such as Downloads, Documents and Pictures.\n\nScan the whole drive?');
+      if (!proceed) return;
+    }
+    var excludes = $('skip').value.split('\n').map(function (l) { return l.trim(); })
+      .filter(function (l) { return l.length > 0; });
+    setMsg('');
+    $('go').disabled = true;
+    try {
+      await api('/api/scan', 'POST', {
+        path: path,
+        minSizeKB: parseInt($('minsize').value, 10),
+        excludes: excludes
+      });
+      $('results').hidden = true;
+      $('bar').hidden = true;
+      $('progress').hidden = false;
+      poll();
+    } catch (e) {
+      $('go').disabled = false;
+      setMsg(e.message, 'error');
+    }
+  }
+
+  function renderProgress(s) {
+    var busy = s.phase === 'walking';
+    var text, pct = 0;
+    if (busy) {
+      text = 'Looking for files. ' + s.filesSeen.toLocaleString() + ' found so far.';
+    } else {
+      text = s.stage + ': ' + s.done.toLocaleString() + ' of ' + s.total.toLocaleString() + ' files';
+      pct = s.total ? Math.round(100 * s.done / s.total) : 0;
+    }
+    $('ptext').textContent = text;
+    $('pfill').style.width = busy ? '30%' : pct + '%';
+    $('pbar').classList.toggle('busy', busy);
+    $('pnote').textContent = s.skipped
+      ? plural(s.skipped, 'item', 'items') + ' could not be read and were skipped.'
+      : '';
+  }
+
+  async function poll() {
+    try {
+      var s = await api('/api/status');
+      renderProgress(s);
+      if (s.phase === 'walking' || s.phase === 'hashing') {
+        setTimeout(poll, 500);
+        return;
+      }
+      $('go').disabled = false;
+      $('progress').hidden = true;
+      if (s.phase === 'done') {
+        await loadResults();
+        if (s.skipped) setMsg(plural(s.skipped, 'item', 'items') + ' could not be read and were skipped.');
+      } else if (s.phase === 'error') {
+        setMsg(s.error || 'The scan failed.', 'error');
+      } else if (s.phase === 'cancelled') {
+        setMsg('Scan cancelled.');
+      }
+    } catch (e) {
+      $('go').disabled = false;
+      setMsg(e.message, 'error');
+    }
+  }
+
+  async function loadResults() {
+    var data = await api('/api/results');
+    state.groups = data.groups || [];
+    state.selected.clear();
+    state.shown = PAGE;
+    renderResults();
+  }
+
+  /* ---------- results ---------- */
+
+  function renderResults() {
+    var groups = state.groups;
+    var wasted = groups.reduce(function (t, g) { return t + g.size * (g.files.length - 1); }, 0);
+    var empty = groups.length === 0;
+    $('results').hidden = false;
+    $('freeable').textContent = fmtBytes(wasted);
+    $('summary').textContent = empty
+      ? 'No duplicates found in that folder.'
+      : plural(groups.length, 'set', 'sets') + ' of identical files. Files are matched by content, so renamed copies count too.';
+    $('tools').hidden = empty;
+    renderGroups();
+    updateBar();
+  }
+
+  function renderGroups() {
+    var list = $('groups');
+    list.textContent = '';
+    state.groups.slice(0, state.shown).forEach(function (g) { list.appendChild(groupEl(g)); });
+    var left = state.groups.length - state.shown;
+    $('more').hidden = left <= 0;
+    $('more').textContent = 'Show more (' + plural(Math.max(left, 0), 'set', 'sets') + ' left)';
+  }
+
+  function groupEl(g) {
+    var art = el('article', 'group');
+    var n = g.files.length;
+    var head = el('header');
+    head.appendChild(el('strong', null, n + ' identical files, ' + fmtBytes(g.size) + ' each'));
+    head.appendChild(el('span', 'free', fmtBytes(g.size * (n - 1)) + ' can be freed'));
+    art.appendChild(head);
+
+    var ul = el('ul');
+    g.files.forEach(function (f) {
+      var li = el('li');
+      var label = el('label');
+      var cb = el('input');
+      cb.type = 'checkbox';
+      cb.checked = state.selected.has(f.path);
+      cb.addEventListener('change', function () { onToggle(g, f.path, cb, art); });
+      var sp = splitPath(f.path);
+      var path = el('span', 'path');
+      path.appendChild(el('span', 'dir', sp.dir));
+      path.appendChild(el('span', 'name', sp.name));
+      label.appendChild(cb);
+      label.appendChild(path);
+      li.appendChild(label);
+      li.appendChild(el('span', 'date', new Date(f.modified * 1000).toLocaleDateString()));
+      li.appendChild(el('span', 'tag', 'Keeping'));
+      ul.appendChild(li);
+    });
+    art.appendChild(ul);
+    markKept(g, art);
+    return art;
+  }
+
+  function markKept(g, art) {
+    var any = g.files.some(function (f) { return state.selected.has(f.path); });
+    var items = art.querySelectorAll('li');
+    g.files.forEach(function (f, i) {
+      items[i].classList.toggle('kept', any && !state.selected.has(f.path));
+    });
+  }
+
+  function onToggle(g, path, cb, art) {
+    if (cb.checked) {
+      var wouldBeAll = g.files.every(function (f) {
+        return f.path === path || state.selected.has(f.path);
+      });
+      if (wouldBeAll) {
+        cb.checked = false;
+        setMsg('Keep at least one copy of each file. Uncheck another copy first.', 'error');
+        return;
+      }
+      state.selected.add(path);
+    } else {
+      state.selected.delete(path);
+    }
+    setMsg('');
+    markKept(g, art);
+    updateBar();
+  }
+
+  function autoSelect(mode) {
+    state.selected.clear();
+    state.groups.forEach(function (g) {
+      var files = g.files.slice();
+      files.sort(function (a, b) {
+        if (mode === 'oldest') return a.modified - b.modified;
+        if (mode === 'newest') return b.modified - a.modified;
+        return a.path.length - b.path.length;
+      });
+      files.slice(1).forEach(function (f) { state.selected.add(f.path); });
+    });
+    setMsg('');
+    renderGroups();
+    updateBar();
+  }
+
+  function selectedBytes() {
+    var total = 0;
+    state.groups.forEach(function (g) {
+      g.files.forEach(function (f) { if (state.selected.has(f.path)) total += g.size; });
+    });
+    return total;
+  }
+
+  function updateBar() {
+    var n = state.selected.size;
+    $('bar').hidden = state.groups.length === 0;
+    $('selinfo').textContent = n === 0
+      ? 'No files selected'
+      : plural(n, 'file', 'files') + ' selected, ' + fmtBytes(selectedBytes());
+    $('del').disabled = n === 0;
+    $('del').textContent = 'Move to the ' + state.trashName;
+  }
+
+  /* ---------- removing ---------- */
+
+  async function removeSelected() {
+    var paths = Array.from(state.selected);
+    if (!paths.length) return;
+    var sizeByPath = {};
+    state.groups.forEach(function (g) { g.files.forEach(function (f) { sizeByPath[f.path] = g.size; }); });
+
+    var ok = window.confirm(
+      'Move ' + plural(paths.length, 'file', 'files') + ' (' + fmtBytes(selectedBytes()) +
+      ') to the ' + state.trashName + '?\n\nYou can restore them from there if you change your mind.');
+    if (!ok) return;
+
+    $('del').disabled = true;
+    try {
+      var data = await api('/api/delete', 'POST', { paths: paths });
+      var good = data.results.filter(function (r) { return r.ok; });
+      var bad = data.results.filter(function (r) { return !r.ok; });
+      var freed = good.reduce(function (t, r) { return t + (sizeByPath[r.path] || 0); }, 0);
+      await loadResults();
+      var text = 'Moved ' + plural(good.length, 'file', 'files') + ' to the ' + state.trashName +
+        '. ' + fmtBytes(freed) + ' freed.';
+      if (bad.length) {
+        text += ' ' + plural(bad.length, 'file was', 'files were') + ' skipped. ' + bad[0].error;
+      }
+      setMsg(text, bad.length ? 'error' : '');
+    } catch (e) {
+      setMsg(e.message, 'error');
+      updateBar();
+    }
+  }
+
+  /* ---------- wiring ---------- */
+
+  $('go').addEventListener('click', startScan);
+  $('path').addEventListener('keydown', function (e) { if (e.key === 'Enter') startScan(); });
+  $('cancel').addEventListener('click', function () { api('/api/cancel', 'POST', {}).catch(function () {}); });
+  $('more').addEventListener('click', function () { state.shown += PAGE; renderGroups(); });
+  $('clear').addEventListener('click', function () { state.selected.clear(); renderGroups(); updateBar(); });
+  $('del').addEventListener('click', removeSelected);
+  Array.prototype.forEach.call(document.querySelectorAll('[data-keep]'), function (b) {
+    b.addEventListener('click', function () { autoSelect(b.getAttribute('data-keep')); });
+  });
+  $('browse').addEventListener('click', async function () {
+    var b = $('browse');
+    b.disabled = true;
+    try {
+      var r = await api('/api/pick', 'POST', {});
+      if (r.path) $('path').value = r.path;
+    } catch (e) {
+      setMsg(e.message, 'error');
+    }
+    b.disabled = false;
+  });
+  $('addskip').addEventListener('click', async function () {
+    var b = $('addskip');
+    b.disabled = true;
+    try {
+      var r = await api('/api/pick', 'POST', {});
+      if (r.path) {
+        var box = $('skip');
+        box.value = box.value.trim() ? box.value.replace(/\s+$/, '') + '\n' + r.path : r.path;
+      }
+    } catch (e) {
+      setMsg(e.message, 'error');
+    }
+    b.disabled = false;
+  });
+  $('quit').addEventListener('click', async function () {
+    try { await api('/api/quit', 'POST', {}); } catch (e) { /* already closed */ }
+    document.body.textContent = 'Dupe Finder has closed. You can close this tab.';
+    document.body.style.padding = '40px';
+  });
+
+  async function init() {
+    try {
+      var p = await api('/api/places');
+      state.trashName = p.trashName || state.trashName;
+      $('browse').hidden = !p.canPick;
+      $('addskip').hidden = !p.canPick;
+      var saved = p.excludes || [];
+      $('skip').value = saved.join('\n');
+      $('skipbox').open = saved.length > 0;
+      (p.places || []).forEach(function (pl) {
+        var b = el('button', 'chip', pl.name);
+        b.type = 'button';
+        b.title = pl.path;
+        b.addEventListener('click', function () { $('path').value = pl.path; });
+        $('places').appendChild(b);
+      });
+      var s = await api('/api/status');
+      if (s.phase === 'walking' || s.phase === 'hashing') {
+        $('path').value = s.root;
+        $('go').disabled = true;
+        $('progress').hidden = false;
+        poll();
+      } else if (s.phase === 'done') {
+        $('path').value = s.root;
+        await loadResults();
+      }
+    } catch (e) {
+      setMsg('Could not reach Dupe Finder. If you closed the app, start it again. (' + e.message + ')', 'error');
+    }
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
